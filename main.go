@@ -38,7 +38,8 @@ func main() {
 	}
 
 	log.Printf("Server starting on port %s with optimized settings...", port)
-	log.Printf("Rate limit: 50 requests/second")
+	log.Printf("Global rate limit: 200 requests/second")
+	log.Printf("Per-IP rate limit: 10 requests/second")
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
