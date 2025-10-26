@@ -23,8 +23,8 @@ API server để tra cứu thông tin vi phạm giao thông từ website CSGT Vi
 
 1. Clone repository:
 ```bash
-git clone <repo-url>
-cd GO_lang
+git clone https://github.com/chiraitori/phatnguoicheck-go.git
+cd phatnguoicheck-go
 ```
 
 2. Cài đặt dependencies:
