@@ -53,8 +53,8 @@ go run .
 
 Hoặc build và chạy:
 ```bash
-go build -o captcha-solver.exe
-./captcha-solver.exe
+go build -o LicensePlatecheck
+./LicensePlatecheck
 ```
 
 Server sẽ khởi động trên port được config trong `.env` (mặc định: 8080)
