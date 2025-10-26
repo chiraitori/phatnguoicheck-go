@@ -24,11 +24,20 @@ func newSessionClient() (*http.Client, error) {
 	}
 	return &http.Client{
 		Jar:     jar,
-		Timeout: 20 * time.Second,
+		Timeout: 45 * time.Second, // Increased from 20s to handle high load
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 100,
+			IdleConnTimeout:     90 * time.Second,
+			DisableKeepAlives:   false,
+		},
 	}, nil
 }
 
 func checkLicensePlate(licensePlate, vehicleType string) (*SubmitFormResponse, int, error) {
+	// Apply rate limiting
+	globalRateLimiter.Wait()
+	
 	var lastErr error
 	for attempt := 1; attempt <= maxCaptchaAttempts; attempt++ {
 		result, err := performSingleAttempt(licensePlate, vehicleType)
@@ -119,45 +128,63 @@ func fetchResultDetails(client *http.Client, href string) (*ResultDetails, error
 		return nil, nil
 	}
 
-	req, err := http.NewRequest("GET", href, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating result request: %w", err)
-	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Referer", formURL)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching result page: %w", err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading result page: %w", err)
-	}
-
-	doc, err := goquery.NewDocumentFromReader(bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("error parsing result page: %w", err)
-	}
-
-	details := &ResultDetails{}
-	violations := extractViolations(doc)
-	if len(violations) > 0 {
-		details.Violations = violations
-	}
-	if len(details.Violations) == 0 {
-		text := normalizeMultiline(doc.Find("#bodyPrint123").Text())
-		if text == "" {
-			text = normalizeMultiline(doc.Find(".xe_texterror").Text())
+	// Retry logic with exponential backoff
+	maxRetries := 3
+	var lastErr error
+	
+	for retry := 0; retry < maxRetries; retry++ {
+		if retry > 0 {
+			// Exponential backoff: 1s, 2s, 4s
+			backoff := time.Duration(1<<uint(retry-1)) * time.Second
+			time.Sleep(backoff)
+			log.Printf("Retrying fetchResultDetails (attempt %d/%d) for: %s", retry+1, maxRetries, href)
 		}
-		details.Message = text
-	}
+		
+		req, err := http.NewRequest("GET", href, nil)
+		if err != nil {
+			return nil, fmt.Errorf("error creating result request: %w", err)
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Referer", formURL)
 
-	if details.Message == "" && len(details.Violations) == 0 {
-		return nil, nil
-	}
+		resp, err := client.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("error fetching result page: %w", err)
+			continue // Retry on error
+		}
+		defer resp.Body.Close()
 
-	return details, nil
+		bodyBytes, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			lastErr = fmt.Errorf("error reading result page: %w", err)
+			continue // Retry on error
+		}
+
+		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(bodyBytes))
+		if err != nil {
+			return nil, fmt.Errorf("error parsing result page: %w", err)
+		}
+
+		details := &ResultDetails{}
+		violations := extractViolations(doc)
+		if len(violations) > 0 {
+			details.Violations = violations
+		}
+		if len(details.Violations) == 0 {
+			text := normalizeMultiline(doc.Find("#bodyPrint123").Text())
+			if text == "" {
+				text = normalizeMultiline(doc.Find(".xe_texterror").Text())
+			}
+			details.Message = text
+		}
+
+		if details.Message == "" && len(details.Violations) == 0 {
+			return nil, nil
+		}
+
+		return details, nil
+	}
+	
+	// All retries failed
+	return nil, fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
 }
