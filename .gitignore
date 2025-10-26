@@ -1,0 +1,10 @@
+# Environment variables
+.env
+
+# Binaries
+*.exe
+captcha-solver
+
+# Temporary files
+captcha-*.png
+captcha-*.jpg
