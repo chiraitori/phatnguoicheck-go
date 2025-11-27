@@ -184,15 +184,6 @@ PORT=8080
 
 MIT
 
-## Đóng Góp
-
-Pull requests are welcome! 
-
-1. Fork repo
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Mở Pull Request
 
 ## Liên Hệ
 
